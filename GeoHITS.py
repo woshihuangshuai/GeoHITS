@@ -156,7 +156,7 @@ def GeoHITS(keyword):
  	locations_value_list = locations_mat.tolist()
  	print '*'*10,'TABLE OF RANK RESULT','*'*10
  	t = PrettyTable(['Location','Value'])
- 	for i in xrange(0,10):
+ 	for i in xrange(0,len(locations):
  		t.add_row([locations[i],locations_value_list[0][i]])
 
  	t.sortby = "Value"
