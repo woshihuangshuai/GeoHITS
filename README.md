@@ -1,1 +1,1 @@
-# LocHITS
+# GeoHITS
