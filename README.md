@@ -1,7 +1,9 @@
 # GeoHITS
 ##File discription
+###country
+countris' name
 ###getbbox.py
-Get most countries' bounding-box with google map API
+Get most countries' bounding-box with google map API and file of 'country'
 ###country_with_bbox
 a json file result from getbbox.py
 ###WriteDataToMongoDB.py
