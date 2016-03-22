@@ -3,6 +3,7 @@ from pymongo import *
 import re
 import collections
 import json
+from point_in_polygon_with_shapely import *
 
 key = []
 key.append('Photo/video_identifier')
@@ -31,71 +32,64 @@ key.append('Photos/video_Smarker')
 key.append('Country')
 
 def InsertDataToMongodbFromDataset():
-	country_with_bbox = open('country_with_bbox')
-	country_dict = collections.OrderedDict()
+	bbox_dict =	Get_area_list()
 
-	line = country_with_bbox.readline()
-	while line:
-		country = json.loads(line)
-		lat = [country['lat']['min'],country['lat']['max']]
-		lng = [country['lng']['min'],country['lng']['max']]
-		bbox = [lng,lat]
-		country_dict[country['name']] = bbox
-		line = country_with_bbox.readline()
-
-	#link to mongodb
-	client = MongoClient('localhost',27017)
+	print 'Linking to MongoDB...'
+	client = MongoClient('localhost', 27017)
 	db = client['YFCC100M']
-	collection_with_geo_tag_and_user_tag = db['dataset_with_tag']
-	collection_without_geo_tag_and_user_tag = db['dataset_without_tag']
+	collection_with_geo_tag_and_user_tag = db['dataset_with_geo_tag']
+	collection_without_geo_tag_and_user_tag = db['dataset_without_geo_tag']
 
-	#readline per line in per dataset
-	for dataset_num in range(0,10):
-		dataset_name = "data/yfcc100m_dataset-%d"%dataset_num
+	print 'Reading YFCC100M dataset and Writing documents to MongoDB...'
+	for dataset_num in xrange(0,10):
+		dataset_name = "../data/yfcc100m_dataset-%d" % dataset_num
 		dataset = open(dataset_name)
 		line_num = 1;
 		line = dataset.readline()
+
 		while line:
 			user_tag = False
 			geo_tag = False
+
 			doc = collections.OrderedDict()
 			value = line.split('\t')
 			value.append('')
-			#split user tages
+			# split user tages
 			if value[8] != '':
 				value[8] = value[8].split(',')
 				user_tag = True
-			#split machine tags
+			# split machine tags
 			if value[9] != '':
 				value[9] = value[9].split(',')
-			#split get tags
+			# reverse geocode
 			if (value[10] != '') & (value[11] != ''):
-				lng = value[10] = float(value[10])
+				lon = value[10] = float(value[10])
 				lat = value[11] = float(value[11])
-				for (k,v) in country_dict.items():
-					if (lng >= v[0][0]) & (lng <= v[0][1]) & (lat >= v[1][0]) & (lat<= v[1][1]):
-						value[23] = k
-						geo_tag = True
+
+				area_name = point_in_polygon_with_shapely(bbox_dict, lat, lon)
+				if area_name != None:
+					value[23] = area_name
+					geo_tag = True
 
 			if user_tag & geo_tag:
-				for i in range(0,24):
+				for i in range(0, 24):
 					doc[key[i]] = value[i]
 				collection_with_geo_tag_and_user_tag.insert(doc)
 			else:
-				for i in range(0,24):
+				for i in range(0, 24):
 					doc[key[i]] = value[i]
 				collection_without_geo_tag_and_user_tag.insert(doc)
 
-			print " Line : %d in dataset : %d is inserted."%(line_num,dataset_num)
+			print " Line : %d in dataset : %d is inserted." % (line_num, dataset_num)
 			line_num = line_num + 1
 			line = dataset.readline()
 
 		dataset.close()
 	print "Data insert mission compeleted!"
 	print "Creating descending index on User_tags in collection_with_geo_tag_and_user_tag..."
-	collection_with_geo_tag_and_user_tag.creat_index([('User_tags',1)])
+	collection_with_geo_tag_and_user_tag.creat_index([('User_tags', 1)])
 	print "Creating descending index on Country in collection_with_geo_tag_and_user_tag..."
-	collection_with_geo_tag_and_user_tag.creat_index([('Country',1)])
+	collection_with_geo_tag_and_user_tag.creat_index([('Country', 1)])
 	print collection_with_geo_tag_and_user_tag.index_information()
 
 	return
