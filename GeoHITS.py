@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-    GeoHITS with tag similarity
+    GeoHITS without tag similarity and tag frequency
 '''
 
 from pymongo import MongoClient
@@ -70,7 +70,7 @@ def DataProcess(cursor):
         user_tags = doc['User_tags']
         country = doc['Country']
 
-        for i in xrange(0, len(tags)-1):
+        for i in xrange(0, len(tags)):
             if tags[i] in user_tags:
                 matrix_locations[locations.index(country)][i] = 1.0
                 # matrix_locations[locations.index(country)][i] += 1.0  # tag frequency
