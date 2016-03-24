@@ -66,7 +66,7 @@ def InsertDataToMongodbFromDataset():
 				lon = value[10] = float(value[10])
 				lat = value[11] = float(value[11])
 
-				area_name = point_in_polygon_with_shapely(bbox_dict, lat, lon)
+				area_name = point_in_polygon_with_shapely(bbox_dict, lon, lat)
 				if area_name != None:
 					value[23] = area_name
 					geo_tag = True
