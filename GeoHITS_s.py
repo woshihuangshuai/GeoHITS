@@ -11,27 +11,48 @@ from point_in_polygon_with_shapely import *
 
 
 def SearchByKeyword(keyword):
-    print '*'*19, 'SEARCH BY KEYWORD', '*'*19
+    print '=>Search by keyword: %s' % keyword
     client = MongoClient('localhost', 27017)
     db = client['YFCC100M']
     collection = db['dataset_with_tag']
 
     query = {'$and':[
                 {'User_tags':{'$in':[keyword]}}, 
-                {'Country':{'$ne':""}}
+                {'Longitude':{'$ne':''}},
+                {'Latitude':{'$ne':''}}
             ]}
 
     fields = {}
     fields['User_tags'] = True
-    fields['Country'] = True
+    fields['Longitude'] = True
+    fields['Latitude'] = True
 
     cursor = collection.find(query, fields)
+
     print "There is %d documents about %s."%(cursor.count(), keyword)
     print
-    return cursor
+
+    print '=>Run point_in_polygon...' 
+    bbox_dict = Get_area_list()
+
+    user_tags_list = []
+    locations_list = []
+
+    for doc in cursor:
+        lon = doc['Longitude']
+        lat = doc['Latitude']
+        user_tags = doc['User_tags']
+
+        country = point_in_polygon_with_shapely(bbox_dict, lon, lat)
+
+        user_tags_list.append(user_tags)
+        locations_list.append(country)
+
+    return user_tags_list, locations_list
 
 
-def DataProcess(cursor):
+def DataProcess(user_tags_list, locations_list):
+    print '=>Do data process...'
     if os.path.exists('result') == False:
         os.mkdir('result')
     #list of locations' and tags'name 
@@ -43,9 +64,10 @@ def DataProcess(cursor):
     #if location_i contains tag_j,locations[j] = 1;else locations[j] = 0
     matrix_locations = []
 
-    for doc in cursor:
-        user_tags = doc['User_tags']
-        country = doc['Country']
+    print '=>Creat locations-tags matrix...'
+    for i in xrange(0, len(locations_list)):
+        user_tags = user_tags_list[i]
+        country = locations_list[i]
 
         if country not in locations:
             locations.append(country)
@@ -54,20 +76,20 @@ def DataProcess(cursor):
             if tag not in tags:
                 tags.append(tag)
 
-    for i in xrange(0,len(locations)):
+    for i in xrange(0, len(locations)):
         location = []
         for j in xrange(0,len(tags)):
             location.append(0.0)
         matrix_locations.append(location)
 
-    cursor.rewind()       # reset cursor
     tags_of_each_location = []
+
     for i in xrange(0, len(locations)):
         tags_of_each_location.append([])
 
-    for doc in cursor:
-        user_tags = doc['User_tags']
-        country = doc['Country']
+    for i in xrange(0, len(locations_list)):
+        user_tags = user_tags_list[i]
+        country = locations_list[i]
 
         for tag in user_tags:
             if tag not in tags_of_each_location[locations.index(country)]:
@@ -100,6 +122,7 @@ def DataProcess(cursor):
     print len(tags) == len(matrix_locations[len(locations)-1])
     '''
 
+    print '=>Print tables of date and log tables to file...'
     # print result and write result to file
     num_list_of_each_location_contains_tags = []
     num_list_of_each_tag_occur_in_locations = []
@@ -112,7 +135,7 @@ def DataProcess(cursor):
     for mat in matrix_locations:
         num_list_of_each_location_contains_tags.append(sum(mat))
 
-    print '*'*10, "TABLE OF EACH LOCATION CONTAINS TAGS", '*'*10
+    print "<<TABLE OF EACH LOCATION CONTAINS TAGS>>"
     t = PrettyTable(["Location", 'Number'])
     for i in xrange(0, len(locations)):
         t.add_row([locations[i], num_list_of_each_location_contains_tags[i]])
@@ -127,7 +150,7 @@ def DataProcess(cursor):
     f.write('Total of locations: %s' % len(locations))
     f.close()
 
-    print '*'*10, 'TABLE OF EACH TAG OCCURS IN LO`CATIONS', '*'*10
+    print '<<TABLE OF EACH TAG OCCURS IN LO`CATIONS>>'
     t = PrettyTable(['Tags', 'Number'])
     for i in xrange(0, len(tags)):
     	t.add_row([tags[i],num_list_of_each_tag_occur_in_locations[i]])
@@ -143,7 +166,8 @@ def DataProcess(cursor):
     f.close()
     # --------------print over---------------------
 
-    # compute Jaccard Similarity between the set of common tags with a set of tags og each location
+    print '=>Calcalate Jaccard similarity...'
+    # between the set of common tags with a set of tags og each location
     jaccard = []
     for i in xrange(0, len(locations)):
         jaccard.append(0.0)
@@ -172,6 +196,7 @@ def DataProcess(cursor):
 
 
 def GeoHITS(locations, tags, matrix_locations):
+    print '=>Runing GeoHITS with tag similarity...'
     locations_mat = np.mat(np.ones([1, len(locations)]), dtype='float64')
     tags_mat = np.mat(np.ones([1, len(tags)]), dtype='float64')
     adjacency_mat = np.mat(matrix_locations, dtype='float64')
@@ -200,10 +225,11 @@ def GeoHITS(locations, tags, matrix_locations):
 
 
 def PrintResult(rank_list, k):
+    print "=>Print rank result and log to file..."
     if os.path.exists('result') == False:
         os.mkdir('result')
 
-    print '*'*10, 'TABLE OF RANK RESULT', '*'*10
+    print '<<TABLE OF RANK RESULT>>'
     t = PrettyTable(['Location', 'Value'])
     for i in xrange(0, len(locations)): 
     # for i in xrange(0, 10):  # print top-10 countries
@@ -223,9 +249,10 @@ def PrintResult(rank_list, k):
 
 if __name__ == '__main__':
     print '*'*55
-    keyword = raw_input("Please input keyword:\t")
+    keyword = raw_input("=>Please input keyword:\t")
     print
-    cursor = SearchByKeyword(keyword)
-    locations, tags, matrix_locations = DataProcess(cursor)
+
+    user_tags_list, locations_list = SearchByKeyword(keyword)
+    locations, tags, matrix_locations = DataProcess(user_tags_list, locations_list)
     rank_list, k = GeoHITS(locations, tags, matrix_locations)
     PrintResult(rank_list, k)
