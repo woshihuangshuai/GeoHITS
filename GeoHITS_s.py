@@ -44,9 +44,9 @@ def SearchByKeyword(keyword):
         user_tags = doc['User_tags']
 
         country = point_in_polygon_with_shapely(bbox_dict, lon, lat)
-
-        user_tags_list.append(user_tags)
-        locations_list.append(country)
+        if country != None:
+            user_tags_list.append(user_tags)
+            locations_list.append(country)
 
     return user_tags_list, locations_list
 
