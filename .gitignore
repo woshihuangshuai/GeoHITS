@@ -1,2 +1,5 @@
 *.geojson
 *.pyc
+/GeoHITS result/
+/GeoHITS_s result/
+/GeoHITS_tf result/
