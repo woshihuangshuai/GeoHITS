@@ -8,6 +8,7 @@ import numpy as np
 from prettytable import PrettyTable
 import os
 from point_in_polygon_with_shapely import *
+from progressive.bar import Bar
 
 
 def SearchByKeyword(keyword):
@@ -28,15 +29,20 @@ def SearchByKeyword(keyword):
     fields['Latitude'] = True
 
     cursor = collection.find(query, fields)
-
-    print "There is %d documents about %s."%(cursor.count(), keyword)
+    total = cursor.count()
+    print "There is %d documents about %s."%(total, keyword)
     print
+    print '=>Runing point_in_polygon:' 
 
-    print '=>Run point_in_polygon...' 
     bbox_dict = Get_area_list()
-
+    print 
     user_tags_list = []
     locations_list = []
+
+    now = 0   #progress 
+    bar = Bar(max_value=total)
+    bar.cursor.clear_lines(2)
+    bar.cursor.save()
 
     for doc in cursor:
         lon = doc['Longitude']
@@ -44,6 +50,9 @@ def SearchByKeyword(keyword):
         user_tags = doc['User_tags']
 
         country = point_in_polygon_with_shapely(bbox_dict, lon, lat)
+        now +=1
+        bar.cursor.restore()
+        bar.draw(value=now)
 
         if country != None:
             user_tags_list.append(user_tags)
@@ -53,7 +62,7 @@ def SearchByKeyword(keyword):
 
 
 def DataProcess(user_tags_list, locations_list):
-    print '=>Do data process...'
+    print '=>Doing data process:'
 
     if os.path.exists('GeoHITS_tf result') == False:
         os.mkdir('GeoHITS_tf result')
@@ -67,7 +76,6 @@ def DataProcess(user_tags_list, locations_list):
     #if location_i contains tag_j,locations[j] = 1;else locations[j] = 0
     matrix_locations = []
 
-    print '=>Creat locations-tags matrix...'
     for i in xrange(0, len(locations_list)):
         user_tags = user_tags_list[i]
         country = locations_list[i]
@@ -79,6 +87,7 @@ def DataProcess(user_tags_list, locations_list):
             if tag not in tags:
                 tags.append(tag)
 
+    print 'Creat locations-tags matrix...'
     for i in xrange(0, len(locations)):
         location = []
         for j in xrange(0,len(tags)):
@@ -86,21 +95,14 @@ def DataProcess(user_tags_list, locations_list):
 
         matrix_locations.append(location)
 
-    tags_of_each_location = []
-    for i in xrange(0, len(locations)):
-        tags_of_each_location.append([])
-
     for i in xrange(0, len(locations_list)):
         user_tags = user_tags_list[i]
         country = locations_list[i]
 
         for tag in user_tags:
-            if tag not in tags_of_each_location[locations.index(country)]:
-                tags_of_each_location[locations.index(country)].append(tag)
-
-        for tag in user_tags:
                 matrix_locations[locations.index(country)][tags.index(tag)] += 1.0    # tag frequency
    
+    print 'Get common tag...'
     # if the number of locations contain tag_i <2,remove tag_i
     del_items = []
     for i in xrange(0, len(tags)):
@@ -124,32 +126,37 @@ def DataProcess(user_tags_list, locations_list):
     print len(tags) == len(matrix_locations[len(locations)-1])
     '''
 
-    print '=>print GeoHITS_tf result and write GeoHITS_tf result to file...'
-    num_list_of_each_location_contains_tags = []
-    num_list_of_each_tag_occur_in_locations = []
+    print 'print GeoHITS_tf result and write GeoHITS_tf result to file...'
+    list_of_num_of_locations_contains_each_tag = []
+    list_of_num_of_tags_belong_to_each_location = []
+    list_of_num_of_each_tags_occurrence = []
 
     for i in xrange(0, len(tags)):
-        num_of_each_tag_occur_in_locations = 0
+        num_of_locations_contains_tag_i = 0
+        num_of_tags_i_occurrence = 0
         for tags_of_location in matrix_locations:
             if tags_of_location[i] != 0:
-                num_of_each_tag_occur_in_locations += 1
+                num_of_locations_contains_tag_i += 1
+                num_of_tags_i_occurrence += tags_of_location[i]
 
-        num_list_of_each_tag_occur_in_locations.append(num_of_each_tag_occur_in_locations)
+        list_of_num_of_locations_contains_each_tag.append(num_of_locations_contains_tag_i)
+        list_of_num_of_each_tags_occurrence.append(num_of_tags_i_occurrence)
 
     for tags_of_location in matrix_locations:
-        num_of_location_contains_tags = 0
+        num_of_tags_belong_to_location_i = 0
         for tag in tags_of_location:
             if tag != 0:
-                num_of_location_contains_tags += 1
+                num_of_tags_belong_to_location_i += 1
 
-        num_list_of_each_location_contains_tags.append(num_of_location_contains_tags)
+        list_of_num_of_tags_belong_to_each_location.append(num_of_tags_belong_to_location_i)
+
 
     print "<<TABLE OF EACH LOCATION CONTAINS TAGS>>"
     t = PrettyTable(["Location", 'Number','Occurrence number'])
 
     for i in xrange(0, len(locations)):
         t.add_row([locations[i], 
-            num_list_of_each_location_contains_tags[i], 
+            list_of_num_of_tags_belong_to_each_location[i], 
             locations_list.count(locations[i])])
 
     t.sortby = "Number"
@@ -167,7 +174,7 @@ def DataProcess(user_tags_list, locations_list):
     t = PrettyTable(['Tags', 'Number'])
 
     for i in xrange(0, len(tags)):
-        t.add_row([tags[i],num_list_of_each_tag_occur_in_locations[i]])
+        t.add_row([tags[i],list_of_num_of_locations_contains_each_tag[i]])
 
     t.sortby = "Number"
     t.reversesort = True
@@ -181,36 +188,60 @@ def DataProcess(user_tags_list, locations_list):
     f.close()
     # --------------print over---------------------
 
-    print '=>Calcalate Tag frequency for each tag in each location...'
-    matrix_locations_tf = matrix_locations[:]
 
+    print 'Calcalate Tag frequency for each tag in each location...'
+    matrix_locations_tf = matrix_locations[:]
+    '''
     for i in xrange(0, len(locations)):
         denominator = max(matrix_locations_tf[i])
         for j in xrange(0, len(tags)):
             numerator = matrix_locations_tf[i][j]
             matrix_locations_tf[i][j] = numerator / denominator
-           
-    return locations, tags, matrix_locations, matrix_locations_tf
+    '''
+    max_of_each_tags_occurrence = []    
+    for i in xrange(0, len(tags)):
+        max = 0
+        for j in xrange(0, len(locations)):
+            if matrix_locations_tf[j][i] >max:
+                max = matrix_locations_tf[j][i]
+
+        max_of_each_tags_occurrence.append(max)
+
+    print max_of_each_tags_occurrence
+
+    for i in xrange(0, len(tags)):
+        for j in xrange(0, len(locations)):
+            matrix_locations_tf[j][i] = matrix_locations_tf[j][i] / max_of_each_tags_occurrence[i]
+
+    return locations, tags, matrix_locations, matrix_locations_tf, \
+            list_of_num_of_locations_contains_each_tag, \
+            list_of_num_of_tags_belong_to_each_location, \
+            list_of_num_of_each_tags_occurrence
 
 
-def GeoHITS(locations, tags, matrix_locations, matrix_locations_tf):
-    print '=>Runing GeoHITS with tag similarity...'
-
+def GeoHITS(locations, tags, matrix_locations, matrix_locations_tf, 
+            list_of_num_of_locations_contains_each_tag,
+            list_of_num_of_tags_belong_to_each_location,
+            list_of_num_of_each_tags_occurrence):
     locations_mat = np.mat(np.ones([1, len(locations)]), dtype='float64')
     tags_mat = np.mat(np.ones([1, len(tags)]), dtype='float64')
+
     adjacency_mat = np.mat(matrix_locations, dtype='float64')
     adjacency_mat_tf = np.mat(matrix_locations_tf, dtype='float64')
 
     last_locations_mat = locations_mat
 
-    v = 10e-15  # threshold
+    v = 10e-8  # threshold
     k = 0  # num of iterations
+    print '=>Runing GeoHITS with tag frequency, threshold = %d' % v
 
     while (k==0) or (np.linalg.norm(last_locations_mat-locations_mat) >= v):
         if k == 0:
             last_locations_mat = locations_mat/np.linalg.norm(locations_mat)
         else:
             last_locations_mat = locations_mat
+
+        print 'Number of iterations: %d' % k
 
         tags_mat = locations_mat*adjacency_mat_tf
         locations_mat = tags_mat*adjacency_mat_tf.T
@@ -224,16 +255,17 @@ def GeoHITS(locations, tags, matrix_locations, matrix_locations_tf):
     return locations_mat.tolist()[0], k
 
 
-def Printresult(rank_list, k):
+def Printresult(locations, rank_list, k):
     print "=>Print rank GeoHITS_tf result and log to file..."
+
     if os.path.exists('GeoHITS_tf result') == False:
         os.mkdir('GeoHITS_tf result')
 
     print '<<TABLE OF RANK GeoHITS_tf result>>'
     t = PrettyTable(['Location', 'Value'])
     for i in xrange(0, len(locations)): 
-    # for i in xrange(0, 10):  # print top-10 countries
         t.add_row([locations[i], rank_list[i]])
+
     t.sortby = "Value"
     t.reversesort = True
     print t
@@ -244,6 +276,7 @@ def Printresult(rank_list, k):
     f.write('\n')
     f.write("Number of iterations = %s" % k)
     f.close()
+
     print '*'*20, 'OVER', '*'*20
 
 
@@ -253,6 +286,15 @@ if __name__ == '__main__':
     print
 
     user_tags_list, locations_list = SearchByKeyword(keyword)
-    locations, tags, matrix_locations, matrix_locations_tf = DataProcess(user_tags_list, locations_list)
-    rank_list, k = GeoHITS(locations, tags, matrix_locations, matrix_locations_tf)
-    Printresult(rank_list, k)
+
+    locations, tags, matrix_locations, matrix_locations_tf, \
+    list_of_num_of_locations_contains_each_tag, \
+    list_of_num_of_tags_belong_to_each_location, \
+    list_of_num_of_each_tags_occurrence = DataProcess(user_tags_list, locations_list)
+
+    rank_list, k = GeoHITS(locations, tags, matrix_locations, matrix_locations_tf,
+                    list_of_num_of_locations_contains_each_tag,
+                    list_of_num_of_tags_belong_to_each_location,
+                    list_of_num_of_each_tags_occurrence)
+
+    Printresult(locations, rank_list, k)
