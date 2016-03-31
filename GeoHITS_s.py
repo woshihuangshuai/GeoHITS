@@ -8,7 +8,7 @@ import numpy as np
 from prettytable import PrettyTable
 import os
 from point_in_polygon_with_shapely import *
-
+from progressive.bar import Bar
 
 def SearchByKeyword(keyword):
     print '=>Search by keyword: %s' % keyword
@@ -28,15 +28,20 @@ def SearchByKeyword(keyword):
     fields['Latitude'] = True
 
     cursor = collection.find(query, fields)
-
-    print "There is %d documents about %s."%(cursor.count(), keyword)
+    total = cursor.count()
+    print "There is %d documents about %s."%(total, keyword)
     print
+    print '=>Runing point_in_polygon:' 
 
-    print '=>Run point_in_polygon...' 
     bbox_dict = Get_area_list()
-
+    print 
     user_tags_list = []
     locations_list = []
+
+    now = 0   #progress 
+    bar = Bar(max_value=total)
+    bar.cursor.clear_lines(2)
+    bar.cursor.save()
 
     for doc in cursor:
         lon = doc['Longitude']
@@ -44,6 +49,10 @@ def SearchByKeyword(keyword):
         user_tags = doc['User_tags']
 
         country = point_in_polygon_with_shapely(bbox_dict, lon, lat)
+        now +=1
+        bar.cursor.restore()
+        bar.draw(value=now)
+
         if country != None:
             user_tags_list.append(user_tags)
             locations_list.append(country)
@@ -194,7 +203,6 @@ def DataProcess(user_tags_list, locations_list):
 
 
 def GeoHITS(locations, tags, matrix_locations, jaccard):
-    print '=>Runing GeoHITS with tag similarity...'
     # matrix_locations * Jaccard similarity
     matrix_locations_jaccard = matrix_locations[:]
 
@@ -211,6 +219,7 @@ def GeoHITS(locations, tags, matrix_locations, jaccard):
 
     v = 10e-8  # threshold
     k = 0  # num of iterations
+    print '=>Runing GeoHITS with tag similarity, threshold = %d' % v
 
     while (k==0) or (np.linalg.norm(last_locations_mat-locations_mat) >= v):
         if k == 0:
@@ -238,8 +247,8 @@ def Printresult(rank_list, k):
     print '<<TABLE OF RANK GeoHITS_s result>>'
     t = PrettyTable(['Location', 'Value'])
     for i in xrange(0, len(locations)): 
-    # for i in xrange(0, 10):  # print top-10 countries
         t.add_row([locations[i], rank_list[i]])
+        
     t.sortby = "Value"
     t.reversesort = True
     print t
