@@ -1,5 +1,14 @@
 # GeoHITS
 
+##keywords
+	1. ubuntu
+	2. python
+	2. Mongdb
+	3. Flick yfcc100m dataset
+	4. shapely,a python 3rd-party package
+	5. OSM,open streem map
+	6. GeoHITS,a extension of HITS algrithm
+
 ##Project description
 	基于Yahoo Flickr YFCC100M 数据集（包含1亿条图片及图片远数据的数据集，其中有约4800万带有地理标记的数据）
 	1. 将YFCC100M数据写入MongoDB数据库。在写入的过程中对每个有地理标记的数据的经纬度进行定位，并添加country字段。
