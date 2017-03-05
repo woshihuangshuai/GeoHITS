@@ -6,7 +6,7 @@
 	2. python
 	2. Mongdb
 	3. Flick yfcc100m dataset
-	4. shapely, a python 3rd-party library	
+	4. shapely, a python 3rd-party library
 	5. OSM, open street map
 	6. GeoHITS, a extension of HITS algrithm
 
@@ -36,3 +36,5 @@
 	1. GeoHITS
 	2. GeoHITS_s: add tag similarity
 	3. GeoHITS_tf: add tag frequency
+
+
